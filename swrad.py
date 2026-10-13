@@ -1,13 +1,13 @@
-# swrad.py — 천리안 2A 지면 하향단파복사(SWRAD, 한반도 KO)를 10분마다 받아 수도권 격자만 작은 JSON 으로.
+# swrad.py — 천리안 2A 지면 하향단파복사(DSR, 한반도 KO 2km)를 10분마다 받아 수도권 격자만 작은 JSON 으로.
 # 출처: 기상청 천리안위성 2A호 (기상청 API허브). 노출계 위젯이 이 JSON 을 읽는다.
 import datetime as dt, json, os, sys, urllib.error, urllib.request
 import numpy as np, netCDF4
+from pyproj import Transformer
 
 KEY = os.environ.get("KMA_KEY", "")
 if not KEY:
     sys.exit("KMA_KEY 비밀값이 없음 — 저장소 Settings → Secrets → Actions 에 추가")
 API = "https://apihub.kma.go.kr/api/typ05/api/GK2A/LE2/SWRAD/KO/data?date={}&authKey=" + KEY
-LATLON = "https://apihub.kma.go.kr/api/typ01/url/gk2a_latlon_file_down.php?area=KO&grid={}&authKey=" + KEY
 BOX = (36.9, 38.1, 126.3, 127.9)   # 위도·경도 범위 (수도권 + 여유)
 
 def get(url):
@@ -27,53 +27,48 @@ def latest():
             return ts, data
     sys.exit("최근 3시간 파일 없음")
 
-def describe(ds):
-    for n, v in ds.variables.items():
-        print(f"  var {n} {v.dimensions} {v.shape} " + " ".join(f"{a}={getattr(v, a)!r}"[:80] for a in v.ncattrs()))
-
-def pick(ds):
-    for n, v in ds.variables.items():   # 하향단파 = DSR (Downward Shortwave Radiation)
-        if n.upper() in ("DSR", "SWDN", "DSWR"): return n
-    for n, v in ds.variables.items():
-        ln = str(getattr(v, "long_name", "")).lower()
-        if "downward" in ln and "short" in ln: return n
-    return None
-
 ts, data = latest()
 ds = netCDF4.Dataset("swrad", memory=data)
-print("file", ts.isoformat(), len(data), "bytes"); describe(ds)
-name = pick(ds)
-if not name: sys.exit("하향단파 변수를 못 찾음 — 위 변수 목록 확인")
-ghi = np.ma.filled(ds.variables[name][:].astype("f4"), np.nan).squeeze()
-print("use", name, ghi.shape, "min/max", np.nanmin(ghi), np.nanmax(ghi))
+print("file", ts.isoformat(), len(data), "bytes", flush=True)
 
-# 격자 위경도 (크기가 맞는 해상도를 찾아 캐시)
-os.makedirs("latlon", exist_ok=True)
-lat = lon = None
-for grid in ("2", "1", "0.5"):
-    path = f"latlon/ko_{grid}.nc"
-    if not os.path.exists(path):
-        raw, ct = get(LATLON.format(grid))
-        if not raw or ct == "application/json": continue
-        open(path, "wb").write(raw)
-    ll = netCDF4.Dataset(path)
-    vs = {k.lower(): k for k in ll.variables}
-    la, lo = ll.variables[vs.get("lat", vs.get("latitude"))][:], ll.variables[vs.get("lon", vs.get("longitude"))][:]
-    print("latlon grid", grid, la.shape)
-    if la.shape == ghi.shape:
-        lat, lon = np.ma.filled(la, np.nan), np.ma.filled(lo, np.nan); break
-if lat is None: sys.exit("위경도 격자 크기가 자료와 안 맞음")
+# 격자: 람베르트 정각원추 (파일의 gk2a_imager_projection 속성에서 읽음), 픽셀 중심 좌표
+p = ds.variables["gk2a_imager_projection"]
+crs = (f"+proj=lcc +lat_1={float(p.standard_parallel1)} +lat_2={float(p.standard_parallel2)} "
+       f"+lat_0={float(p.origin_latitude)} +lon_0={float(p.central_meridian)} +x_0=0 +y_0=0 +ellps=WGS84 +units=m")
+px, x0, y0 = float(p.pixel_size), float(p.upper_left_easting), float(p.upper_left_northing)
 
-m = (lat >= BOX[0]) & (lat <= BOX[1]) & (lon >= BOX[2]) & (lon <= BOX[3])
-ii, jj = np.where(m)
-step = 2 if len(ii) > 2500 else 1                 # 너무 많으면 한 칸 걸러 (≈4km)
-sel = (ii % step == 0) & (jj % step == 0)
-pts = [[round(float(lat[i, j]), 3), round(float(lon[i, j]), 3), None if np.isnan(ghi[i, j]) else round(float(ghi[i, j]), 1)]
-       for i, j in zip(ii[sel], jj[sel])]
-out = {"source": "GK2A SWRAD KO " + name, "attribution": "기상청 천리안위성 2A호",
+dsr = np.ma.filled(ds.variables["DSR"][:].astype("f4"), np.nan)          # W/m², scale_factor 자동 적용
+good = np.ma.filled(ds.variables["DSR_DQF1"][:], 0) == 1
+angle = np.ma.filled(ds.variables["SW_DQF"][:], 0) == 1                  # 0 이면 SZA>70 등 (저고도 태양)
+print("DSR", dsr.shape, "valid", int(np.isfinite(dsr).sum()), flush=True)
+
+# 상자 → 행·열 범위
+to_xy = Transformer.from_crs("EPSG:4326", crs, always_xy=True)
+to_ll = Transformer.from_crs(crs, "EPSG:4326", always_xy=True)
+xs, ys = to_xy.transform([BOX[2], BOX[3], BOX[2], BOX[3]], [BOX[0], BOX[0], BOX[1], BOX[1]])
+c0, c1 = int((min(xs) - x0) // px), int((max(xs) - x0) // px) + 1
+r0, r1 = int((y0 - max(ys)) // px), int((y0 - min(ys)) // px) + 1
+rows, cols = np.arange(r0, r1 + 1, 2), np.arange(c0, c1 + 1, 2)         # 한 칸 걸러 (≈4km)
+R, C = np.meshgrid(rows, cols, indexing="ij")
+lon, lat = to_ll.transform(x0 + C * px, y0 - R * px)
+
+pts = []
+for i, j, la, lo in zip(R.ravel(), C.ravel(), lat.ravel(), lon.ravel()):
+    if not (BOX[0] <= la <= BOX[1] and BOX[2] <= lo <= BOX[3]):
+        continue
+    v = dsr[i, j]
+    pts.append([round(float(la), 3), round(float(lo), 3),
+                None if np.isnan(v) else round(float(v), 1),
+                int(good[i, j] and angle[i, j])])
+vals = [q[2] for q in pts if q[2] is not None]
+print("points", len(pts), "with value", len(vals),
+      "min/max", (min(vals), max(vals)) if vals else None, flush=True)
+
+out = {"source": "GK2A LE2 SWRAD KO DSR", "attribution": "기상청 천리안위성 2A호", "unit": "W/m2",
        "time": ts.strftime("%Y-%m-%dT%H:%MZ"),
        "fetched": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
-       "points": pts}
+       "night": not vals,
+       "points": pts}                                                    # [위도, 경도, 일사량|null, 품질 1/0]
 os.makedirs("site", exist_ok=True)
 json.dump(out, open("site/swrad.json", "w"), ensure_ascii=False, separators=(",", ":"))
-print("points", len(pts), "bytes", os.path.getsize("site/swrad.json"))
+print("json bytes", os.path.getsize("site/swrad.json"))
