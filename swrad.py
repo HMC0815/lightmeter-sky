@@ -17,11 +17,15 @@ def get(url):
     except urllib.error.HTTPError as e:
         return None, str(e.code)
 
+LAST = os.environ.get("LAST", "")             # 직전에 올린 시각 (YYYYMMDDHHMM) — 같으면 받지 않고 끝
+
 def latest():
     now = dt.datetime.now(dt.timezone.utc).replace(second=0, microsecond=0)
     t = now - dt.timedelta(minutes=now.minute % 10)
     for k in range(18):                        # 3시간 안에서 가장 최근 파일 (10분 간격, 보통 ~15분 지연)
         ts = t - dt.timedelta(minutes=10 * k)
+        if LAST and ts.strftime("%Y%m%d%H%M") <= LAST:
+            print("새 파일 없음", LAST); sys.exit(3)
         data, ct = get(API.format(ts.strftime("%Y%m%d%H%M")))
         if data and ct != "application/json":
             return ts, data
@@ -72,3 +76,4 @@ out = {"source": "GK2A LE2 SWRAD KO DSR", "attribution": "기상청 천리안위
 os.makedirs("site", exist_ok=True)
 json.dump(out, open("site/swrad.json", "w"), ensure_ascii=False, separators=(",", ":"))
 print("json bytes", os.path.getsize("site/swrad.json"))
+open("last.txt", "w").write(ts.strftime("%Y%m%d%H%M"))
