@@ -26,12 +26,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          end=$((SECONDS + 350*60))
+          end=$((SECONDS + 350*60)); fail=0
           while [ $SECONDS -lt $end ]; do
-            LAST=$(cat last.txt 2>/dev/null || true) python swrad.py && (
-              cd site && rm -rf .git && git init -q -b data && git add swrad.json &&
-              git -c user.name=relay -c user.email=relay@users.noreply.github.com commit -qm "swrad $(cat ../last.txt)" &&
-              git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" data && echo "pushed $(cat ../last.txt)"
-            ) || true
+            code=0; LAST=$(cat last.txt 2>/dev/null || true) python swrad.py || code=$?
+            if [ $code -eq 0 ]; then
+              fail=0
+              (cd site && rm -rf .git && git init -q -b data && git add swrad.json &&
+               git -c user.name=relay -c user.email=relay@users.noreply.github.com commit -qm "swrad $(cat ../last.txt)" &&
+               git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" data && echo "pushed $(cat ../last.txt)") || true
+            elif [ $code -ne 3 ]; then
+              fail=$((fail + 1)); echo "실패 $fail 번째 (코드 $code)"
+              # 연달아 3번(약 15분) 실패 = 이 러너 IP 가 막힌 것 → 끝내서 줄 서 있던 다음 실행(새 IP)이 이어받게
+              if [ $fail -ge 3 ]; then exit 0; fi   # 실패로 끝내면 메일이 와서 0
+            fi
             sleep 300
           done
