@@ -1,12 +1,15 @@
 name: swrad
 # 천리안 SWRAD 를 10분마다 받아 data 브랜치에 swrad.json 하나만 올린다 (커밋 1개를 매번 덮어써서 기록이 안 쌓임).
-# GitHub 예약 실행은 몇 시간씩 밀려서, 한 번 켜지면 5시간 50분 동안 안에서 직접 돈다. 끝나면 줄 서 있던 다음 실행이 이어받는다.
+# GitHub 예약 실행(cron)은 저우선이라 몇 시간씩 밀리거나 건너뛴다 (하루에 3번 돈 적 있음).
+# 그래서 한 번 켜지면 5시간 50분 동안 안에서 직접 돌고, 끝나기 전에 자기가 자기를 다시 켠다 (workflow_dispatch 는 GITHUB_TOKEN 으로도 새 실행을 만든다).
+# 예약 실행은 사슬이 끊겼을 때의 예비. 사슬이 끊기면 Actions → swrad → Run workflow 한 번.
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "7,37 * * * *"     # 정각·30분은 혼잡해서 더 밀림
   workflow_dispatch:
 permissions:
   contents: write
+  actions: write               # 자기 자신 다시 켜기
 concurrency:
   group: swrad
   cancel-in-progress: false   # 도는 중이면 다음 실행은 한 개만 줄 서서 기다림
@@ -27,8 +30,14 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           curl -sf "https://raw.githubusercontent.com/${REPO}/data/swrad.json" -o prev.json || true   # 마지막 정상 장면 이어받기
-          end=$((SECONDS + 350*60)); fail=0
+          next() {   # 다음 실행 예약 — 같은 그룹이라 이 실행이 끝날 때까지 줄 서 있다가 바로 이어받는다
+            curl -sf -X POST -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${REPO}/actions/workflows/swrad.yml/dispatches" -d '{"ref":"main"}' \
+              && echo "다음 실행 예약함" || echo "다음 실행 예약 실패"
+          }
+          end=$((SECONDS + 350*60)); fail=0; queued=0
           while [ $SECONDS -lt $end ]; do
+            if [ $queued -eq 0 ] && [ $SECONDS -gt $((end - 8*60)) ]; then next; queued=1; fi
             code=0; LAST=$(cat last.txt 2>/dev/null || true) python swrad.py || code=$?
             if [ $code -eq 0 ]; then
               fail=0
@@ -38,7 +47,7 @@ jobs:
             elif [ $code -ne 3 ]; then
               fail=$((fail + 1)); echo "실패 $fail 번째 (코드 $code)"
               # 연달아 3번(약 15분) 실패 = 이 러너 IP 가 막힌 것 → 끝내서 줄 서 있던 다음 실행(새 IP)이 이어받게
-              if [ $fail -ge 3 ]; then exit 0; fi   # 실패로 끝내면 메일이 와서 0
+              if [ $fail -ge 3 ]; then next; exit 0; fi   # 다음 실행(새 IP)을 켜고 끝. 실패로 끝내면 메일이 와서 0
             fi
             sleep 300
           done
