@@ -12,10 +12,12 @@ BOX = (36.9, 38.1, 126.3, 127.9)   # 위도·경도 범위 (수도권 + 여유)
 
 def get(url):
     try:
-        with urllib.request.urlopen(url, timeout=90) as r:
+        with urllib.request.urlopen(url, timeout=40) as r:
             return r.read(), r.headers.get_content_type()
     except urllib.error.HTTPError as e:
         return None, str(e.code)
+    except (urllib.error.URLError, TimeoutError, OSError) as e:   # 연결 자체가 안 됨 (러너 IP 가 막혔을 때 등)
+        print("기상청 연결 실패", type(e).__name__, flush=True); sys.exit(4)
 
 LAST = os.environ.get("LAST", "")             # 직전에 올린 시각 (YYYYMMDDHHMM) — 같으면 받지 않고 끝
 
