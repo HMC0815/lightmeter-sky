@@ -1,32 +1,37 @@
 name: swrad
+# 천리안 SWRAD 를 10분마다 받아 data 브랜치에 swrad.json 하나만 올린다 (커밋 1개를 매번 덮어써서 기록이 안 쌓임).
+# GitHub 예약 실행은 몇 시간씩 밀려서, 한 번 켜지면 5시간 50분 동안 안에서 직접 돈다. 끝나면 줄 서 있던 다음 실행이 이어받는다.
 on:
   schedule:
-    - cron: "*/10 * * * *"     # 천리안 SWRAD 10분 간격 (GitHub 예약 실행은 몇 분 늦을 수 있음)
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: swrad
+  cancel-in-progress: false   # 도는 중이면 다음 실행은 한 개만 줄 서서 기다림
 jobs:
-  build:
+  relay:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+    timeout-minutes: 355
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install --quiet netCDF4 numpy pyproj
-      - run: python swrad.py
+      - name: loop
         env:
           KMA_KEY: ${{ secrets.KMA_KEY }}
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - id: deploy
-        uses: actions/deploy-pages@v4
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          end=$((SECONDS + 350*60))
+          while [ $SECONDS -lt $end ]; do
+            LAST=$(cat last.txt 2>/dev/null || true) python swrad.py && (
+              cd site && rm -rf .git && git init -q -b data && git add swrad.json &&
+              git -c user.name=relay -c user.email=relay@users.noreply.github.com commit -qm "swrad $(cat ../last.txt)" &&
+              git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" data && echo "pushed $(cat ../last.txt)"
+            ) || true
+            sleep 300
+          done
