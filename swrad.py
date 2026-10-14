@@ -70,11 +70,24 @@ vals = [q[2] for q in pts if q[2] is not None]
 print("points", len(pts), "with value", len(vals),
       "min/max", (min(vals), max(vals)) if vals else None, flush=True)
 
+# 마지막 정상 장면 — 해가 20° 아래(천정각 70° 초과)면 품질 0 이라 위젯이 이걸 이어 쓴다 (앱 쪽 한도 90분)
+prev = {}
+for f in ("site/swrad.json", "prev.json"):                              # 같은 실행 안 → 직전 파일, 새 실행 → 배포본
+    try: prev = json.load(open(f)); break
+    except Exception: pass
+n_good = sum(1 for q in pts if q[2] is not None and q[3] == 1)
+if vals and n_good >= len(pts) / 2:
+    good = {"time": ts.strftime("%Y-%m-%dT%H:%MZ"), "ghi": [q[2] if q[3] == 1 else None for q in pts]}
+else:
+    good = prev.get("good") if len(prev.get("points", [])) == len(pts) else None
+print("good", good["time"] if good else None, "this frame good", n_good, flush=True)
+
 out = {"source": "GK2A LE2 SWRAD KO DSR", "attribution": "기상청 천리안위성 2A호", "unit": "W/m2",
        "time": ts.strftime("%Y-%m-%dT%H:%MZ"),
        "fetched": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%MZ"),
        "night": not vals,
-       "points": pts}                                                    # [위도, 경도, 일사량|null, 품질 1/0]
+       "points": pts,                                                    # [위도, 경도, 일사량|null, 품질 1/0]
+       "good": good}
 os.makedirs("site", exist_ok=True)
 json.dump(out, open("site/swrad.json", "w"), ensure_ascii=False, separators=(",", ":"))
 print("json bytes", os.path.getsize("site/swrad.json"))
