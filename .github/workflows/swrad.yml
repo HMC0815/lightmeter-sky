@@ -26,6 +26,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
+          curl -sf "https://raw.githubusercontent.com/${REPO}/data/swrad.json" -o prev.json || true   # 마지막 정상 장면 이어받기
           end=$((SECONDS + 350*60)); fail=0
           while [ $SECONDS -lt $end ]; do
             code=0; LAST=$(cat last.txt 2>/dev/null || true) python swrad.py || code=$?
