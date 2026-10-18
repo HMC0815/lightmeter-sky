@@ -41,7 +41,8 @@ jobs:
             code=0; LAST=$(cat last.txt 2>/dev/null || true) python swrad.py || code=$?
             if [ $code -eq 0 ]; then
               fail=0
-              (cd site && rm -rf .git && git init -q -b data && git add swrad.json &&
+              cp -r pages/. site/ 2>/dev/null; touch site/.nojekyll   # 정책·지원 페이지도 같이 (GitHub Pages = data 브랜치)
+              (cd site && rm -rf .git && git init -q -b data && git add -A &&
                git -c user.name=relay -c user.email=relay@users.noreply.github.com commit -qm "swrad $(cat ../last.txt)" &&
                git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" data && echo "pushed $(cat ../last.txt)") || true
             elif [ $code -ne 3 ]; then
