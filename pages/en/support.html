@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sunstop — Support</title>
+<style>body{margin:0;background:#141312;color:#e9e6e1;font:16px/1.7 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Apple SD Gothic Neo",sans-serif}main{max-width:640px;margin:0 auto;padding:40px 20px 80px}h1{font-size:24px}h2{font-size:17px;margin-top:32px}p,li{color:#c9c4bd}a{color:#e39a3b}small{color:#8a847d}</style></head>
+<body><main>
+<h1>Sunstop Support</h1>
+<p>Sunstop is a light meter for film cameras. It has a camera-based meter, plus widgets and a Lock Screen bar that tell you the exposure right now from satellite irradiance — no need to take out your phone's camera. Exposures are calculated for negative film.</p>
+
+<h2>Adding widgets</h2>
+<ul>
+<li>Home Screen: long-press an empty area, tap + → Sunstop → Medium.</li>
+<li>Lock Screen: long-press the Lock Screen, tap Customize → Lock Screen → widgets → Sunstop.</li>
+<li>To change ISO or base aperture, long-press the widget and choose “Edit Widget”.</li>
+<li>Turn on the Lock Screen bar (Live Activity) with the toggle on the app's first screen. iOS ends it after up to 8 hours, so turn it on again for long days out.</li>
+<li>Camera Control: choose Sunstop in Settings → Camera → Camera Control to open the meter while your iPhone is locked.</li>
+</ul>
+
+<h2>FAQ</h2>
+<p><b>What light is the big number for?</b><br>Light in the open, where the sky is unobstructed. On days with passing clouds it shows the value for when the sun is hidden (“Sun hidden”), and near sunset the golden-hour value. The bottom line shows in shade · in sun · time to sunset.</p>
+<p><b>Why does it read a little more generous than other meters?</b><br>Negative film handles overexposure well and underexposure poorly. Sunstop adds one stop so that even days when the satellite overestimates the light stay within the film's latitude.</p>
+<p><b>It's off under trees or between buildings.</b><br>The satellite only knows the sky over your area. Under cover, indoors, or at a hazy sunset, use the camera meter.</p>
+<p><b>It says “Use camera”.</b><br>At night, during blue hour, or at an overcast dusk the satellite can't measure the light. Use the camera meter.</p>
+<p><b>It says “Seoul (default)” or another city.</b><br>Location access is off, so Sunstop calculated for the main city of your device's time zone. Go to Settings → Sunstop → Location and choose “While Using the App”.</p>
+<p><b>“(old)” appears next to my location.</b><br>Sunstop couldn't get a new location and used the last one it had. Open the app once to refresh it.</p>
+<p><b>How accurate is it?</b><br>The model was fitted to 1,268 photos and 29 light-meter comparisons in Seoul. On clear days, cloudy days and at golden hour it's within about ±½ stop, and with the extra stop about 96% of readings fall within negative film's latitude. For slide film, use the camera meter.</p>
+<p><b>Does it work outside Korea?</b><br>Yes. In Korea it uses GK2A satellite data; everywhere else it uses Open-Meteo satellite and forecast data. Sun position and golden hour are exact anywhere, but irradiance accuracy has only been validated around Seoul so far — feedback from your city is very welcome.</p>
+
+<h2>Data sources</h2>
+<ul>
+<li>KMA GEO-KOMPSAT-2A (GK2A) surface downward shortwave radiation</li>
+<li>Weather data by <a href="https://open-meteo.com/">Open-Meteo.com</a> (CC BY 4.0)</li>
+</ul>
+
+<h2>Contact</h2>
+<p><a href="mailto:unclejoapps@gmail.com">unclejoapps@gmail.com</a> · <a href="privacy.html">Privacy Policy</a></p>
+<p><small><a href="../support.html">한국어</a> · <a href="../en/support.html">English</a> · <a href="../ja/support.html">日本語</a></small></p>
+</main>
+</body></html>
